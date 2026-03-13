@@ -2,7 +2,7 @@
   "name": "The Notes",
   "short_name": "Notes",
   "description": "Journal, sermon notes & personal notes",
-  "start_url": "./",
+  "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#f2f3f5",

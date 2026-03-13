@@ -1,7 +1,7 @@
 const CACHE_NAME = 'the-notes-v1';
 const ASSETS = [
   './',
-  './the-notes.html',
+  './index.html',
   './notes-manifest.json',
   './notes-icon-192.png',
   './notes-icon-512.png'
