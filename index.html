@@ -382,40 +382,72 @@ body{
   width:72%;
 }
 .tag-float-inner{
-  display:flex;align-items:center;gap:4px;
+  display:flex;align-items:center;gap:5px;
   backdrop-filter:blur(40px) saturate(2.5) brightness(1.05);
   -webkit-backdrop-filter:blur(40px) saturate(2.5) brightness(1.05);
-  background:rgba(255,255,255,0.88);
+  background:rgba(255,255,255,0.82);
   border:1px solid rgba(255,255,255,0.9);
-  border-radius:30px;padding:4px 12px;
+  border-radius:30px;padding:5px 8px;
   overflow-x:auto;scrollbar-width:none;
   -webkit-overflow-scrolling:touch;
   width:100%;
   box-shadow:inset 0 1px 0 rgba(255,255,255,1),0 8px 32px rgba(0,0,0,0.1),0 2px 8px rgba(0,0,0,0.05);
+  transition:all .2s;
 }
 .tag-float-inner::-webkit-scrollbar{display:none;}
 .tag-chip{
-  flex-shrink:0;padding:0 14px;border-radius:0;
+  flex-shrink:0;padding:0 11px;border-radius:20px;
   font-family:Nunito,sans-serif;font-size:10px;font-weight:700;
-  color:rgba(10,20,50,0.35);cursor:pointer;background:transparent;border:none;
-  transition:color .18s;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
-  height:32px;display:flex;align-items:center;
+  color:rgba(10,20,50,0.45);cursor:pointer;
+  background:transparent;
+  border:1.5px solid transparent;
+  transition:all .18s cubic-bezier(.22,.8,.3,1);
+  text-transform:uppercase;letter-spacing:.4px;white-space:nowrap;
+  height:28px;display:flex;align-items:center;gap:4px;
   position:relative;
+  -webkit-tap-highlight-color:transparent;
 }
 .tag-chip.active{
-  color:rgba(10,20,50,0.85);
+  color:rgba(10,20,50,0.9);
   font-weight:900;
+  background:rgba(255,255,255,0.85);
+  border-color:rgba(0,0,0,0.1);
+  box-shadow:0 2px 8px rgba(0,0,0,0.08), inset 0 1px 0 rgba(255,255,255,1);
 }
-.tag-chip.active::after{
-  content:'';
-  position:absolute;
-  bottom:2px;
-  left:50%;
-  transform:translateX(-50%);
-  width:16px;
-  height:2.5px;
-  border-radius:2px;
-  background:var(--accent);
+/* Colored tag chip */
+.tag-chip.has-color{
+  color:#fff !important;
+  font-weight:800;
+  border-color:rgba(255,255,255,0.25) !important;
+  box-shadow:0 2px 10px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+  text-shadow:0 1px 2px rgba(0,0,0,0.2);
+}
+.tag-chip.has-color.active{
+  filter:brightness(1.12) saturate(1.2);
+  box-shadow:0 3px 14px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+}
+/* Drag states */
+.tag-chip.dragging{
+  opacity:0.35;
+  transform:scale(0.9);
+  pointer-events:none;
+}
+.tag-chip.drag-over{
+  transform:scale(1.08);
+  box-shadow:0 0 0 2px var(--accent), 0 3px 14px rgba(0,0,0,0.15) !important;
+}
+.tag-chip.drag-placeholder{
+  background:rgba(74,144,217,0.12) !important;
+  border-color:rgba(74,144,217,0.35) !important;
+  color:rgba(74,144,217,0.6) !important;
+  box-shadow:none !important;
+}
+/* Long-press scale feedback */
+.tag-chip:active{
+  transform:scale(0.93);
+}
+.tag-chip.has-color:active{
+  filter:brightness(0.9);
 }
 
 /* Tag + FAB */
@@ -586,6 +618,36 @@ body{
   transition:transform .15s;flex-shrink:0;
 }
 .tagcolor-swatch:active{transform:scale(1.2);}
+
+/* ── TAG LABEL COLOR PICKER (for tag chips, separate from card color) ── */
+.tag-label-color-pop{
+  position:fixed;z-index:750;
+  backdrop-filter:blur(50px) saturate(2.2);
+  -webkit-backdrop-filter:blur(50px) saturate(2.2);
+  background:rgba(255,255,255,0.93);
+  border:1px solid rgba(255,255,255,0.9);
+  border-radius:18px;padding:11px 13px 11px;
+  box-shadow:inset 1px 1px 0 rgba(255,255,255,1),0 12px 40px rgba(0,0,0,0.16);
+  display:none;flex-direction:column;gap:9px;
+  min-width:205px;
+}
+.tag-label-color-pop.show{display:flex;}
+.tlcp-header{display:flex;align-items:center;justify-content:space-between;}
+.tlcp-title{font-family:Nunito,sans-serif;font-size:9px;font-weight:900;color:var(--text3);letter-spacing:.9px;text-transform:uppercase;}
+.tlcp-none-btn{font-size:9px;font-weight:800;color:var(--text3);cursor:pointer;padding:3px 8px;border-radius:8px;border:1px solid rgba(0,0,0,0.08);background:transparent;font-family:Nunito,sans-serif;letter-spacing:.3px;transition:background .12s;}
+.tlcp-none-btn:active{background:rgba(0,0,0,0.06);}
+.tlcp-swatches{display:flex;gap:7px;flex-wrap:wrap;}
+.tlcp-swatch{
+  width:24px;height:24px;border-radius:50%;cursor:pointer;
+  border:2.5px solid rgba(255,255,255,0.9);
+  box-shadow:0 2px 7px rgba(0,0,0,0.2);
+  transition:transform .15s,box-shadow .15s;flex-shrink:0;
+  position:relative;
+}
+.tlcp-swatch:active{transform:scale(1.25);}
+.tlcp-swatch.selected{
+  box-shadow:0 0 0 3px rgba(255,255,255,0.9), 0 0 0 5px currentColor, 0 3px 8px rgba(0,0,0,0.2);
+}
 .tcolor-pop{
   position:fixed;z-index:700;
   backdrop-filter:blur(40px) saturate(2);
@@ -1661,6 +1723,8 @@ body{
 <div class="ctx-menu" id="tagCtxMenu">
   <div class="ctx-item" onclick="tagCtxRename()">Rename</div>
   <div class="ctx-sep"></div>
+  <div class="ctx-item" id="tagCtxColorItem" onclick="tagCtxOpenColor()">Tag Color</div>
+  <div class="ctx-sep"></div>
   <div class="ctx-item" onclick="tagCtxMoveLeft()">Move left</div>
   <div class="ctx-item" onclick="tagCtxMoveRight()">Move right</div>
   <div class="ctx-sep"></div>
@@ -1696,6 +1760,15 @@ body{
 <div class="tcolor-pop" id="tColorPop">
   <div class="tcolor-pop-title">Card Color</div>
   <div class="tcolor-swatches" id="tColorSwatches"></div>
+</div>
+
+<!-- Tag Label Color Picker (for tag chip color, separate from card bookmark color) -->
+<div class="tag-label-color-pop" id="tagLabelColorPop">
+  <div class="tlcp-header">
+    <div class="tlcp-title">Tag Color</div>
+    <button class="tlcp-none-btn" onclick="applyTagLabelColor(null)">None</button>
+  </div>
+  <div class="tlcp-swatches" id="tagLabelColorSwatches"></div>
 </div>
 
 <script>
@@ -2752,19 +2825,50 @@ function rN(){
 function sfS(tag,el){
   cf_s=tag;
   document.querySelectorAll('#sermonTagBar .tag-chip').forEach(function(c){c.classList.remove('active');});
-  el.classList.add('active');
-  rS();
+  if(el)el.classList.add('active');
+  renderSermonList();
 }
 
 function rS(){
   var bar=document.getElementById('sermonTagBar');
-  var allTags=[];
-  D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&allTags.indexOf(t)<0)allTags.push(t);});});
-  var chips='<button class="tag-chip'+(cf_s==='all'?' active':'')+'" data-tag="all" onclick="sfS(this.dataset.tag,this)">All</button>';
+  var rawTags=[];
+  D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&rawTags.indexOf(t)<0)rawTags.push(t);});});
+
+  // Apply saved order
+  var order=D.sermonTagOrder||[];
+  var allTags=order.filter(function(t){return rawTags.indexOf(t)>=0;});
+  rawTags.forEach(function(t){if(allTags.indexOf(t)<0)allTags.push(t);});
+
+  // Build chips
+  var allChip=document.createElement('button');
+  allChip.className='tag-chip'+(cf_s==='all'?' active':'');
+  allChip.dataset.tag='all';
+  allChip.textContent='All';
+  allChip.onclick=function(){sfS('all',this);};
+  bar.innerHTML='';
+  bar.appendChild(allChip);
+
   allTags.forEach(function(t){
-    chips+='<button class="tag-chip'+(cf_s===t?' active':'')+'" data-tag="'+esc(t)+'" onclick="sfS(this.dataset.tag,this)" oncontextmenu="showTagCtx(event,\'sermon\',this.dataset.tag);return false;" ontouchstart="startTagLong(event,\'sermon\',this.dataset.tag)" ontouchend="cancelTagLong()" ontouchmove="cancelTagLong()">'+esc(t)+'</button>';
+    var btn=document.createElement('button');
+    var tagColor=getTagLabelColor('sermon',t);
+    btn.className='tag-chip'+(cf_s===t?' active':'')+(tagColor?' has-color':'');
+    btn.dataset.tag=t;
+    if(tagColor)btn.style.background=tagColor;
+    btn.textContent=t;
+    // tap to filter
+    btn.onclick=function(){sfS(this.dataset.tag,this);};
+    // long press → color picker (600ms)
+    attachTagLongPress(btn,'sermon',t);
+    bar.appendChild(btn);
   });
-  bar.innerHTML=chips;
+
+  // Init drag-reorder on the bar
+  initTagDrag(bar,'sermon');
+
+  renderSermonList();
+}
+
+function renderSermonList(){
 
   var el=document.getElementById('sList');
   var list=D.sermons.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
@@ -2782,6 +2886,205 @@ function rS(){
       +'<div class="ncard-foot" style="margin-top:6px;"><span class="ncard-date">'+fs(s.date)+'</span></div>'
       +'</div>';
   }).join('');
+}
+
+// ── TAG LABEL COLOR SYSTEM (for tag chips — separate from card bookmark color) ──
+var TAG_LABEL_COLORS=[
+  '#4a90d9','#7a3ab8','#db3778','#ef5555',
+  '#f0b429','#34c77b','#1a8a80','#4a6a88',
+  '#e06030','#969696'
+];
+
+var _tlcpTarget=null, _tlcpSection=null;
+
+(function(){
+  var sw=document.getElementById('tagLabelColorSwatches');
+  if(!sw)return;
+  TAG_LABEL_COLORS.forEach(function(hex,i){
+    var d=document.createElement('div');
+    d.className='tlcp-swatch';
+    d.style.background=hex;
+    d.style.color=hex;
+    d.onclick=function(){applyTagLabelColor(i);};
+    sw.appendChild(d);
+  });
+})();
+
+function showTagLabelColorPop(ev,section,tag){
+  ev.stopPropagation();
+  _tlcpTarget=tag; _tlcpSection=section;
+  // Update selected state
+  var swatches=document.querySelectorAll('.tlcp-swatch');
+  var curIdx=D.tagLabelColors?(D.tagLabelColors[section+':'+tag]):undefined;
+  swatches.forEach(function(s,i){s.classList.toggle('selected',i===curIdx);});
+  var pop=document.getElementById('tagLabelColorPop');
+  pop.classList.add('show');
+  var x=ev.clientX, y=ev.clientY;
+  var pw=210, ph=100;
+  if(x+pw>window.innerWidth)x=window.innerWidth-pw-8;
+  if(x<8)x=8;
+  if(y+ph>window.innerHeight)y=y-ph-10; else y=y+8;
+  if(y<8)y=8;
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+}
+
+function applyTagLabelColor(idx){
+  if(!_tlcpTarget&&_tlcpTarget!=='')return;
+  if(!D.tagLabelColors)D.tagLabelColors={};
+  var key=_tlcpSection+':'+_tlcpTarget;
+  if(idx===null){delete D.tagLabelColors[key];}
+  else{D.tagLabelColors[key]=idx;}
+  save();
+  if(_tlcpSection==='sermon')rS(); else rN();
+  document.getElementById('tagLabelColorPop').classList.remove('show');
+}
+
+function getTagLabelColor(section,tag){
+  if(!D.tagLabelColors||!tag)return '';
+  var idx=D.tagLabelColors[section+':'+tag];
+  if(idx===undefined||idx===null)return '';
+  return TAG_LABEL_COLORS[idx];
+}
+
+document.addEventListener('click',function(e){
+  if(!e.target.closest('#tagLabelColorPop'))document.getElementById('tagLabelColorPop').classList.remove('show');
+});
+document.addEventListener('scroll',function(){document.getElementById('tagLabelColorPop').classList.remove('show');},true);
+
+// ── TAG LONG PRESS — opens label color picker ──
+function attachTagLongPress(btn, section, tag){
+  var timer=null, moved=false, startX=0, startY=0;
+  btn.addEventListener('touchstart',function(e){
+    moved=false;
+    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+    timer=setTimeout(function(){
+      if(!moved){
+        // vibrate feedback
+        if(navigator.vibrate)navigator.vibrate(18);
+        showTagLabelColorPop(e.touches[0],section,tag);
+      }
+    },600);
+  },{passive:true});
+  btn.addEventListener('touchmove',function(e){
+    var dx=e.touches[0].clientX-startX, dy=e.touches[0].clientY-startY;
+    if(Math.abs(dx)>6||Math.abs(dy)>6){moved=true;clearTimeout(timer);}
+  },{passive:true});
+  btn.addEventListener('touchend',function(){clearTimeout(timer);});
+  btn.addEventListener('touchcancel',function(){clearTimeout(timer);});
+  // Desktop right-click still opens old tag context menu
+  btn.addEventListener('contextmenu',function(e){
+    e.preventDefault();
+    showTagLabelColorPop(e,section,tag);
+  });
+}
+
+// ── TAG DRAG REORDER (touch-based, sermon only) ──
+var _dragState={active:false,el:null,section:null,origTag:null,placeholder:null,startX:0,startY:0,moved:false};
+
+function initTagDrag(bar, section){
+  var chips=bar.querySelectorAll('.tag-chip:not([data-tag="all"])');
+  chips.forEach(function(chip){
+    chip.addEventListener('touchstart',function(e){
+      _dragState.startX=e.touches[0].clientX;
+      _dragState.startY=e.touches[0].clientY;
+      _dragState.moved=false;
+      _dragState.el=chip;
+      _dragState.section=section;
+      _dragState.origTag=chip.dataset.tag;
+      _dragState.dragTimer=setTimeout(function(){
+        if(!_dragState.moved){
+          startTagDrag(e,chip,section);
+        }
+      },450);
+    },{passive:true});
+    chip.addEventListener('touchmove',function(e){
+      var dx=e.touches[0].clientX-_dragState.startX;
+      var dy=e.touches[0].clientY-_dragState.startY;
+      if(!_dragState.active&&(Math.abs(dx)>8||Math.abs(dy)>8)){
+        _dragState.moved=true;
+        clearTimeout(_dragState.dragTimer);
+      }
+      if(_dragState.active){
+        e.preventDefault();
+        onTagDragMove(e);
+      }
+    },{passive:false});
+    chip.addEventListener('touchend',function(){
+      clearTimeout(_dragState.dragTimer);
+      if(_dragState.active)endTagDrag();
+    });
+    chip.addEventListener('touchcancel',function(){
+      clearTimeout(_dragState.dragTimer);
+      if(_dragState.active)cancelTagDrag();
+    });
+  });
+}
+
+function startTagDrag(e,chip,section){
+  if(navigator.vibrate)navigator.vibrate(22);
+  _dragState.active=true;
+  chip.classList.add('dragging');
+  // Create floating ghost
+  var ghost=chip.cloneNode(true);
+  ghost.id='tagDragGhost';
+  ghost.style.cssText='position:fixed;z-index:9999;pointer-events:none;opacity:0.88;transform:scale(1.12) rotate(-2deg);transition:none;box-shadow:0 8px 24px rgba(0,0,0,0.22);';
+  var r=chip.getBoundingClientRect();
+  ghost.style.left=r.left+'px';ghost.style.top=r.top+'px';
+  ghost.style.width=r.width+'px';ghost.style.height=r.height+'px';
+  document.body.appendChild(ghost);
+  _dragState.ghost=ghost;
+  _dragState.ghostOffX=e.touches[0].clientX-r.left;
+  _dragState.ghostOffY=e.touches[0].clientY-r.top;
+}
+
+function onTagDragMove(e){
+  if(!_dragState.ghost)return;
+  var cx=e.touches[0].clientX, cy=e.touches[0].clientY;
+  _dragState.ghost.style.left=(cx-_dragState.ghostOffX)+'px';
+  _dragState.ghost.style.top=(cy-_dragState.ghostOffY)+'px';
+  // Find chip under finger
+  var bar=document.getElementById('sermonTagBar');
+  var chips=Array.from(bar.querySelectorAll('.tag-chip:not(.dragging):not([data-tag="all"])'));
+  var target=null;
+  chips.forEach(function(c){c.classList.remove('drag-over');});
+  for(var i=0;i<chips.length;i++){
+    var r=chips[i].getBoundingClientRect();
+    if(cx>=r.left&&cx<=r.right&&cy>=r.top-10&&cy<=r.bottom+10){target=chips[i];break;}
+  }
+  if(target){target.classList.add('drag-over');}
+  _dragState.dropTarget=target;
+}
+
+function endTagDrag(){
+  if(_dragState.ghost)_dragState.ghost.remove();
+  _dragState.ghost=null;
+  var dragged=_dragState.el;
+  var dropOn=_dragState.dropTarget;
+  dragged&&dragged.classList.remove('dragging');
+  document.querySelectorAll('.tag-chip').forEach(function(c){c.classList.remove('drag-over');});
+
+  if(dragged&&dropOn&&dragged!==dropOn){
+    // Reorder in D.sermonTagOrder
+    var bar=document.getElementById('sermonTagBar');
+    var chips=Array.from(bar.querySelectorAll('.tag-chip:not([data-tag="all"])'));
+    var order=chips.map(function(c){return c.dataset.tag;});
+    var fromIdx=order.indexOf(dragged.dataset.tag);
+    var toIdx=order.indexOf(dropOn.dataset.tag);
+    if(fromIdx>=0&&toIdx>=0){
+      order.splice(fromIdx,1);
+      order.splice(toIdx,0,dragged.dataset.tag);
+      D.sermonTagOrder=order;
+      save();rS();
+    }
+  }
+  _dragState={active:false,el:null,section:null,origTag:null,placeholder:null,startX:0,startY:0,moved:false};
+}
+
+function cancelTagDrag(){
+  if(_dragState.ghost)_dragState.ghost.remove();
+  _dragState.el&&_dragState.el.classList.remove('dragging');
+  document.querySelectorAll('.tag-chip').forEach(function(c){c.classList.remove('drag-over');});
+  _dragState={active:false,el:null,section:null,origTag:null,placeholder:null,startX:0,startY:0,moved:false};
 }
 
 // ── TAG CONTEXT MENU ──
@@ -2810,6 +3113,18 @@ function showTagCtx(ev,section,name){
   menu.style.left=x+'px';menu.style.top=y+'px';
 }
 function hideTagCtx(){document.getElementById('tagCtxMenu').classList.remove('show');}
+function tagCtxOpenColor(){
+  hideTagCtx();
+  // Show tag label color picker near center of screen
+  var pop=document.getElementById('tagLabelColorPop');
+  _tlcpTarget=tagCtxName; _tlcpSection=tagCtxSection;
+  var swatches=document.querySelectorAll('.tlcp-swatch');
+  var curIdx=D.tagLabelColors?(D.tagLabelColors[tagCtxSection+':'+tagCtxName]):undefined;
+  swatches.forEach(function(s,i){s.classList.toggle('selected',i===curIdx);});
+  pop.classList.add('show');
+  var x=window.innerWidth/2-105, y=window.innerHeight/2-55;
+  pop.style.left=x+'px'; pop.style.top=y+'px';
+}
 document.addEventListener('click',function(e){
   if(!e.target.closest('#tagCtxMenu'))hideTagCtx();
 });
@@ -2851,7 +3166,6 @@ function tagCtxMoveLeft(){
   if(tagCtxSection==='note'){
     var tags=[];D.notes.forEach(function(n){if(n.tag&&tags.indexOf(n.tag)<0)tags.push(n.tag);});
     var i=tags.indexOf(tagCtxName);if(i<=0)return;
-    // swap with previous by renaming temporarily
     var prev=tags[i-1];
     D.notes=D.notes.map(function(n){
       if(n.tag===tagCtxName)return Object.assign({},n,{tag:'__tmp__'});
@@ -2861,13 +3175,14 @@ function tagCtxMoveLeft(){
     D.notes=D.notes.map(function(n){return n.tag==='__tmp__'?Object.assign({},n,{tag:prev}):n;});
     save();rN();
   } else {
-    var tags=[];D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&tags.indexOf(t)<0)tags.push(t);});});
+    // Use sermonTagOrder
+    var rawTags=[];D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&rawTags.indexOf(t)<0)rawTags.push(t);});});
+    var order=D.sermonTagOrder||[];
+    var tags=order.filter(function(t){return rawTags.indexOf(t)>=0;});
+    rawTags.forEach(function(t){if(tags.indexOf(t)<0)tags.push(t);});
     var i=tags.indexOf(tagCtxName);if(i<=0)return;
-    var prev=tags[i-1];
-    D.sermons=D.sermons.map(function(s){
-      var t=(s.tags||[]).map(function(x){return x===tagCtxName?'__tmp__':x===prev?tagCtxName:x;});
-      return Object.assign({},s,{tags:t.map(function(x){return x==='__tmp__'?prev:x;})});
-    });
+    tags.splice(i,1);tags.splice(i-1,0,tagCtxName);
+    D.sermonTagOrder=tags;
     save();rS();
   }
 }
@@ -2885,13 +3200,14 @@ function tagCtxMoveRight(){
     D.notes=D.notes.map(function(n){return n.tag==='__tmp__'?Object.assign({},n,{tag:next}):n;});
     save();rN();
   } else {
-    var tags=[];D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&tags.indexOf(t)<0)tags.push(t);});});
+    // Use sermonTagOrder
+    var rawTags=[];D.sermons.forEach(function(s){(s.tags||[]).forEach(function(t){if(t&&rawTags.indexOf(t)<0)rawTags.push(t);});});
+    var order=D.sermonTagOrder||[];
+    var tags=order.filter(function(t){return rawTags.indexOf(t)>=0;});
+    rawTags.forEach(function(t){if(tags.indexOf(t)<0)tags.push(t);});
     var i=tags.indexOf(tagCtxName);if(i<0||i>=tags.length-1)return;
-    var next=tags[i+1];
-    D.sermons=D.sermons.map(function(s){
-      var t=(s.tags||[]).map(function(x){return x===tagCtxName?'__tmp__':x===next?tagCtxName:x;});
-      return Object.assign({},s,{tags:t.map(function(x){return x==='__tmp__'?next:x;})});
-    });
+    tags.splice(i,1);tags.splice(i+1,0,tagCtxName);
+    D.sermonTagOrder=tags;
     save();rS();
   }
 }
