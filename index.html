@@ -904,6 +904,18 @@ body{
   padding-left:26px;
 }
 
+/* While actively scrolling a long list, drop the expensive backdrop-filter
+   blur on cards (the real cost on mobile is the blur compositing, not the
+   element count) and fall back to a cheap solid-ish background that looks
+   close enough for the split second scrolling is happening. Restored the
+   moment scrolling settles. */
+body.is-scrolling .ncard,
+body.is-scrolling .scard{
+  backdrop-filter:none!important;
+  -webkit-backdrop-filter:none!important;
+  background:rgba(244,248,253,0.92)!important;
+}
+
 .card-bookmark{
   position:absolute;left:0;top:0;bottom:0;
   width:18px;
@@ -1032,7 +1044,9 @@ body{
 
 /* ── SERMON CARDS ── */
 .sermon-wrap{padding:90px 16px 14px;background:transparent;}
-.sermon-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+.sermon-grid{position:relative;width:100%;}
+.sermon-row{position:absolute;left:0;right:0;display:flex;gap:11px;box-sizing:border-box;}
+.sermon-row>.ncard{flex:1 1 0;min-width:0;}
 .scard{
   backdrop-filter:blur(28px) saturate(2.2) brightness(1.08);
   -webkit-backdrop-filter:blur(28px) saturate(2.2) brightness(1.08);
@@ -2316,13 +2330,41 @@ function openFP(id){
   document.getElementById(id).classList.add('open');
   var tb = id==='fpNote'?document.getElementById('tbNote'):document.getElementById('tbSermon');
   if(tb){document.body.appendChild(tb);tb.classList.add('active');}
+  document.body.style.overflow='hidden';
   history.pushState({fp:id}, '', window.location.href);
 }
 function closeFP(id){
   document.getElementById(id).classList.remove('open');
   var tb = id==='fpNote'?document.getElementById('tbNote'):document.getElementById('tbSermon');
   if(tb){tb.classList.remove('active');}
+  // Only unlock background scroll once no fullpage editor remains open
+  var otherId = id==='fpNote'?'fpSermon':'fpNote';
+  var other = document.getElementById(otherId);
+  if(!other || !other.classList.contains('open')){
+    document.body.style.overflow='';
+  }
 }
+
+// ── SCROLL PERFORMANCE: drop card blur while actively scrolling ──
+// backdrop-filter is the single biggest GPU cost for these card lists on
+// mobile, well above DOM node count. Toggling it off only during the
+// scroll gesture keeps scrolling smooth while the resting look is unchanged.
+(function(){
+  var scrollEndTimer=null;
+  function onAnyScroll(){
+    document.body.classList.add('is-scrolling');
+    clearTimeout(scrollEndTimer);
+    scrollEndTimer=setTimeout(function(){
+      document.body.classList.remove('is-scrolling');
+    },150);
+  }
+  window.addEventListener('scroll',onAnyScroll,{passive:true});
+  // also catch scroll inside the fixed-position fullpage editors (.fullpage
+  // has its own overflow-y:auto, separate from window scroll)
+  document.addEventListener('scroll',function(e){
+    if(e.target&&e.target.classList&&e.target.classList.contains('fullpage'))onAnyScroll();
+  },true);
+})();
 
 // ── KEEP TOOLBAR ABOVE THE ON-SCREEN KEYBOARD ──
 // 1) Track how much the soft keyboard has eaten into the visual viewport,
@@ -2981,24 +3023,180 @@ function rS(){
   renderSermonList();
 }
 
-function renderSermonList(){
+// ── VIRTUALIZED SERMON LIST (keeps scrolling light with many sermons) ──
+// Cards are grouped 2-per-row (matching the visual grid). Only rows near
+// the visible viewport are actually in the DOM; everything else exists
+// only as data + a cached measured height, with the container's total
+// height kept accurate so the page scrollbar / scroll position behaves
+// exactly like a fully-rendered list.
+var _sRows=[];          // array of [sermonA, sermonB|null] pairs, in display order
+var _sRowHeights=[];    // measured (or estimated) height per row, px
+var _sRowTops=[];       // cumulative top offset per row, px
+var _sRenderedRows={};  // rowIndex -> DOM element currently mounted
+var _sEstRowHeight=92;  // refined automatically once real rows are measured
+var _sMeasuredSum=0, _sMeasuredCount=0;
+var _sScrollHandler=null, _sResizeHandler=null;
+var _sVirtualActive=false;
 
+function _sCardHtml(s){
+  var tag=s.tags&&s.tags.length?s.tags[0]:'';
+  var sbm=getTagColor('sermon', tag);
+  return '<div class="ncard'+(sbm?' has-bookmark':'')+'" onclick="openSermonForm('+s.id+')" style="cursor:pointer;">'
+    +(sbm?'<div class="card-bookmark" style="background:'+sbm+';"><span class="card-bookmark-label">'+esc(tag)+'</span></div>':'')
+    +'<button class="card-dots" onclick="event.stopPropagation();showCtx(event,\'sermon\','+s.id+')">···</button>'
+    +'<div class="ncard-title" style="padding-right:28px;">'+esc(s.title)+'</div>'
+    +(s.speaker?'<div class="ncard-date" style="margin-top:4px;font-size:10px;font-weight:700;color:var(--text3);">'+esc(s.speaker)+'</div>':'')
+    +(s.church?'<div class="ncard-date" style="font-size:10px;font-weight:700;color:var(--text3);">'+esc(s.church)+'</div>':'')
+    +'<div class="ncard-foot" style="margin-top:6px;"><span class="ncard-date">'+fs(s.date)+'</span></div>'
+    +'</div>';
+}
+
+function _sBuildRowEl(rowIdx){
+  var pair=_sRows[rowIdx];
+  var row=document.createElement('div');
+  row.className='sermon-row';
+  row.dataset.rowIdx=rowIdx;
+  var html=_sCardHtml(pair[0]);
+  html+= pair[1] ? _sCardHtml(pair[1]) : '<div style="flex:1 1 0;min-width:0;"></div>';
+  row.innerHTML=html;
+  return row;
+}
+
+function _sRecomputeTops(){
+  var top=0;
+  for(var i=0;i<_sRows.length;i++){
+    _sRowTops[i]=top;
+    top+=(_sRowHeights[i]||_sEstRowHeight)+11; // +gap
+  }
+  var el=document.getElementById('sList');
+  if(el)el.style.height=Math.max(0,top-11)+'px';
+}
+
+function _sGetViewportRange(){
+  var el=document.getElementById('sList');
+  if(!el || !_sRows.length)return [0,-1];
+  var rect=el.getBoundingClientRect();
+  var vh=window.innerHeight||800;
+  var bufferAbove=Math.round(vh*0.6);
+  var bufferBelow=Math.round(vh*0.9);
+  var viewTop=-rect.top-bufferAbove;
+  var viewBottom=vh-rect.top+bufferBelow;
+
+  // binary search: first row whose bottom edge >= viewTop
+  var lo=0,hi=_sRows.length-1,start=_sRows.length;
+  while(lo<=hi){
+    var mid=(lo+hi)>>1;
+    var bottom=_sRowTops[mid]+(_sRowHeights[mid]||_sEstRowHeight);
+    if(bottom>=viewTop){start=mid;hi=mid-1;}
+    else lo=mid+1;
+  }
+  // binary search: first row whose top edge >= viewBottom (exclusive end)
+  lo=0;hi=_sRows.length-1;var end=_sRows.length;
+  while(lo<=hi){
+    var mid2=(lo+hi)>>1;
+    if(_sRowTops[mid2]>=viewBottom){end=mid2;hi=mid2-1;}
+    else lo=mid2+1;
+  }
+  start=Math.max(0,Math.min(start,_sRows.length-1));
+  end=Math.max(start,Math.min(end-1,_sRows.length-1));
+  return [start,end];
+}
+
+function _sRenderVisible(){
+  if(!_sVirtualActive)return;
+  var el=document.getElementById('sList');
+  if(!el)return;
+  var sec=document.getElementById('sec-sermon');
+  if(!sec||!sec.classList.contains('active'))return; // tab hidden, skip — rect/offsetHeight unreliable while display:none
+  var range=_sGetViewportRange();
+  var lo=range[0],hi=range[1];
+  // unmount rows outside range
+  Object.keys(_sRenderedRows).forEach(function(k){
+    var idx=parseInt(k,10);
+    if(idx<lo||idx>hi){
+      var node=_sRenderedRows[idx];
+      if(node&&node.parentNode)node.parentNode.removeChild(node);
+      delete _sRenderedRows[idx];
+    }
+  });
+  // mount rows inside range
+  var needsRetop=false;
+  for(var i=lo;i<=hi;i++){
+    if(_sRenderedRows[i])continue;
+    var rowEl=_sBuildRowEl(i);
+    rowEl.style.top=_sRowTops[i]+'px';
+    el.appendChild(rowEl);
+    _sRenderedRows[i]=rowEl;
+    var h=rowEl.offsetHeight;
+    if(h>0 && Math.abs((_sRowHeights[i]||0)-h)>1){
+      if(_sRowHeights[i]===undefined){_sMeasuredSum+=h;_sMeasuredCount++;_sEstRowHeight=Math.round(_sMeasuredSum/_sMeasuredCount);}
+      _sRowHeights[i]=h;
+      needsRetop=true;
+    }
+  }
+  if(needsRetop){
+    _sRecomputeTops();
+    // reposition currently mounted rows to their corrected offsets
+    Object.keys(_sRenderedRows).forEach(function(k){
+      var idx=parseInt(k,10);
+      _sRenderedRows[idx].style.top=_sRowTops[idx]+'px';
+    });
+  }
+}
+
+function _sScheduleRender(){
+  if(_sScrollHandler&&_sScrollHandler._raf)return;
+  _sScrollHandler._raf=requestAnimationFrame(function(){
+    _sScrollHandler._raf=null;
+    _sRenderVisible();
+  });
+}
+
+function _sTeardownVirtual(){
+  if(_sScrollHandler)window.removeEventListener('scroll',_sScrollHandler);
+  if(_sResizeHandler)window.removeEventListener('resize',_sResizeHandler);
+  _sVirtualActive=false;
+}
+
+function renderSermonList(){
   var el=document.getElementById('sList');
   var list=D.sermons.slice().sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
   if(cf_s!=='all')list=list.filter(function(s){return s.tags&&s.tags.indexOf(cf_s)>=0;});
-  if(!list.length){el.innerHTML='<div class="empty"><div class="empty-icon" style="font-size:32px;opacity:.22;"></div><div class="empty-text">No sermon notes yet<br>Tap + to start noting</div></div>';return;}
-  el.innerHTML=list.map(function(s){
-    var tag=s.tags&&s.tags.length?s.tags[0]:'';
-    var sbm=getTagColor('sermon', tag);
-    return '<div class="ncard'+(sbm?' has-bookmark':'')+'" onclick="openSermonForm('+s.id+')" style="cursor:pointer;">'
-      +(sbm?'<div class="card-bookmark" style="background:'+sbm+';"><span class="card-bookmark-label">'+esc(tag)+'</span></div>':'')
-      +'<button class="card-dots" onclick="event.stopPropagation();showCtx(event,\'sermon\','+s.id+')">···</button>'
-      +'<div class="ncard-title" style="padding-right:28px;">'+esc(s.title)+'</div>'
-      +(s.speaker?'<div class="ncard-date" style="margin-top:4px;font-size:10px;font-weight:700;color:var(--text3);">'+esc(s.speaker)+'</div>':'')
-      +(s.church?'<div class="ncard-date" style="font-size:10px;font-weight:700;color:var(--text3);">'+esc(s.church)+'</div>':'')
-      +'<div class="ncard-foot" style="margin-top:6px;"><span class="ncard-date">'+fs(s.date)+'</span></div>'
-      +'</div>';
-  }).join('');
+
+  _sTeardownVirtual();
+  el.innerHTML='';
+  el.style.height='';
+  _sRenderedRows={};
+
+  if(!list.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon" style="font-size:32px;opacity:.22;"></div><div class="empty-text">No sermon notes yet<br>Tap + to start noting</div></div>';
+    _sRows=[];_sRowHeights=[];_sRowTops=[];
+    return;
+  }
+
+  _sRows=[];
+  for(var i=0;i<list.length;i+=2)_sRows.push([list[i],list[i+1]||null]);
+  _sRowHeights=new Array(_sRows.length); // unmeasured until rendered
+  _sRowTops=new Array(_sRows.length);
+  _sMeasuredSum=0;_sMeasuredCount=0;
+  _sRecomputeTops();
+
+  _sVirtualActive=true;
+  _sScrollHandler=function(){_sScheduleRender();};
+  _sResizeHandler=function(){
+    // width changed → cached heights may be stale; remeasure mounted rows
+    Object.keys(_sRenderedRows).forEach(function(k){
+      var idx=parseInt(k,10);
+      var node=_sRenderedRows[idx];
+      var h=node.offsetHeight;
+      if(h>0)_sRowHeights[idx]=h;
+    });
+    _sRecomputeTops();
+    _sRenderVisible();
+  };
+  window.addEventListener('scroll',_sScrollHandler);
+  window.addEventListener('resize',_sResizeHandler);
+  _sRenderVisible();
 }
 
 // ── TAG LABEL COLOR SYSTEM (for tag chips — separate from card bookmark color) ──
