@@ -20,6 +20,7 @@
   --text:#0d1a2e;--text2:#3a5068;--text3:#8aa8c0;
   --glass-bg:rgba(255,255,255,0.55);--glass-border:rgba(255,255,255,0.75);
   --glass-shadow:0 8px 32px rgba(30,80,150,0.13),0 1.5px 0 rgba(255,255,255,0.7) inset;
+  --kb-offset:0px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;user-select:none;-webkit-user-select:none;font-family:'Nunito',sans-serif;}
 input,textarea,[contenteditable]{user-select:text;-webkit-user-select:text;}
@@ -1240,18 +1241,21 @@ body{
 /* ── FLOATING LIQUID GLASS TOOLBAR — compact pill, auto-width ── */
 /* ── TOOLBAR WRAP ── */
 .nb-toolbar-wrap{
-  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  position:fixed;bottom:0;left:50%;
+  transform:translateX(-50%) translateY(calc(-1 * var(--kb-offset, 0px)));
   width:100%;max-width:420px;
   z-index:510;
   padding:12px 20px 24px;
   pointer-events:none;
   display:flex;flex-direction:column;align-items:stretch;gap:0;
-  opacity:0;transition:opacity .22s;
+  opacity:0;transition:opacity .22s, transform .12s ease-out;
   background:transparent;
 }
 #tbNote.active,#tbSermon.active{opacity:1;pointer-events:all;}
 .ntb-popup-pill{
-  position:fixed;bottom:90px;left:50%;transform:translateX(-50%);
+
+  position:fixed;bottom:90px;left:50%;
+  transform:translateX(-50%) translateY(calc(-1 * var(--kb-offset, 0px)));
   width:calc(100% - 40px);max-width:380px;
   backdrop-filter:blur(40px) saturate(2);-webkit-backdrop-filter:blur(40px) saturate(2);
   background:rgba(255,255,255,0.55);
@@ -1261,6 +1265,7 @@ body{
   padding:8px 4px;
   box-shadow:0 4px 20px rgba(0,0,0,0.07),inset 0 1px 0 rgba(255,255,255,0.9);
   z-index:520;
+  transition:transform .12s ease-out;
 }
 .ntb-popup-pill.show{display:flex;}
 .ntb-popup-row{display:flex;align-items:center;padding:2px 8px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;gap:0;justify-content:space-between;}
@@ -2319,6 +2324,40 @@ function closeFP(id){
   if(tb){tb.classList.remove('active');}
 }
 
+// ── KEEP TOOLBAR ABOVE THE ON-SCREEN KEYBOARD ──
+// 1) Track how much the soft keyboard has eaten into the visual viewport,
+//    and push the floating toolbar up by that amount so it never gets buried.
+(function(){
+  function applyKbOffset(px){
+    document.documentElement.style.setProperty('--kb-offset', px+'px');
+  }
+  if(window.visualViewport){
+    var vv=window.visualViewport;
+    var update=function(){
+      var kb=window.innerHeight-vv.height-vv.offsetTop;
+      if(kb<0)kb=0;
+      applyKbOffset(kb);
+    };
+    vv.addEventListener('resize',update);
+    vv.addEventListener('scroll',update);
+    update();
+  }
+})();
+
+// 2) Tapping anywhere inside the floating toolbar (the "···" button, B/I/U/S,
+//    color dots, alignment, etc.) must NOT steal focus away from the
+//    contenteditable area — otherwise the keyboard closes on every tap.
+//    Using mousedown/touchstart + preventDefault keeps focus (and the
+//    keyboard) right where it was; the click handlers still run normally.
+document.querySelectorAll('.nb-toolbar-wrap').forEach(function(wrap){
+  ['mousedown','touchstart'].forEach(function(evt){
+    wrap.addEventListener(evt,function(e){
+      var btn=e.target.closest('button');
+      if(btn)e.preventDefault();
+    },{passive:false});
+  });
+});
+
 // Push a base state so back never exits the app
 history.replaceState({base:true}, '', window.location.href);
 
@@ -2795,6 +2834,58 @@ function sfN(tag,el){
   rN();
 }
 
+// ── INCREMENTAL NOTE LIST RENDERING (keeps scrolling light with many notes) ──
+var _nRenderList=[];   // currently filtered list, in render order
+var _nRenderedCount=0; // how many of _nRenderList are already in the DOM
+var _nBatchSize=24;    // cards per batch
+var _nIO=null;         // IntersectionObserver watching the sentinel
+
+function _nCardHtml(n){
+  var nbm=getTagColor('note', n.tag);
+  var tagLabel=n.tag?esc(n.tag):'';
+  return '<div class="ncard'+(nbm?' has-bookmark':'')+'" onclick="openNoteForm('+n.id+')" style="cursor:pointer;">'
+    +(nbm?'<div class="card-bookmark" style="background:'+nbm+';"><span class="card-bookmark-label">'+tagLabel+'</span></div>':'')
+    +'<button class="card-dots" onclick="event.stopPropagation();showCtx(event,\'note\','+n.id+')">···</button>'
+    +'<div class="ncard-title">'+esc(n.title)+'</div>'
+    +'<div class="ncard-body">'+esc(n.body)+'</div>'
+    +'<div class="ncard-foot"><span class="ncard-date">'+fs(n.date)+'</span></div>'
+    +'</div>';
+}
+
+function _nEnsureSentinel(el){
+  var s=document.getElementById('nListSentinel');
+  if(!s){
+    s=document.createElement('div');
+    s.id='nListSentinel';
+    s.style.gridColumn='1/-1';
+    s.style.height='1px';
+  }
+  el.appendChild(s); // always keep it last
+  return s;
+}
+
+function _nRenderNextBatch(){
+  var el=document.getElementById('nList');
+  if(!el)return;
+  var start=_nRenderedCount;
+  var end=Math.min(start+_nBatchSize,_nRenderList.length);
+  if(start>=end)return;
+  var frag=document.createDocumentFragment();
+  var tmp=document.createElement('div');
+  for(var i=start;i<end;i++){
+    tmp.innerHTML=_nCardHtml(_nRenderList[i]);
+    frag.appendChild(tmp.firstChild);
+  }
+  var sentinel=document.getElementById('nListSentinel');
+  if(sentinel)el.insertBefore(frag,sentinel);
+  else el.appendChild(frag);
+  _nRenderedCount=end;
+  if(_nRenderedCount>=_nRenderList.length){
+    if(sentinel&&sentinel.parentNode)sentinel.parentNode.removeChild(sentinel);
+    if(_nIO){_nIO.disconnect();_nIO=null;}
+  }
+}
+
 function rN(){
   var bar=document.getElementById('notesTagBar');
   var allTags=[];
@@ -2806,20 +2897,31 @@ function rN(){
   bar.innerHTML=chips;
 
   var el=document.getElementById('nList');
+  if(_nIO){_nIO.disconnect();_nIO=null;}
   var list=D.notes;
   if(cf_n!=='all')list=list.filter(function(n){return n.tag===cf_n;});
-  if(!list.length){el.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon" style="font-size:32px;opacity:.22;"></div><div class="empty-text">No notes yet<br>Tap + to add one</div></div>';return;}
-  el.innerHTML=list.map(function(n){
-    var nbm=getTagColor('note', n.tag);
-    var tagLabel=n.tag?esc(n.tag):'';
-    return '<div class="ncard'+(nbm?' has-bookmark':'')+'" onclick="openNoteForm('+n.id+')" style="cursor:pointer;">'
-      +(nbm?'<div class="card-bookmark" style="background:'+nbm+';"><span class="card-bookmark-label">'+tagLabel+'</span></div>':'')
-      +'<button class="card-dots" onclick="event.stopPropagation();showCtx(event,\'note\','+n.id+')">···</button>'
-      +'<div class="ncard-title">'+esc(n.title)+'</div>'
-      +'<div class="ncard-body">'+esc(n.body)+'</div>'
-      +'<div class="ncard-foot"><span class="ncard-date">'+fs(n.date)+'</span></div>'
-      +'</div>';
-  }).join('');
+  if(!list.length){
+    el.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon" style="font-size:32px;opacity:.22;"></div><div class="empty-text">No notes yet<br>Tap + to add one</div></div>';
+    _nRenderList=[];_nRenderedCount=0;
+    return;
+  }
+  el.innerHTML='';
+  _nRenderList=list;
+  _nRenderedCount=0;
+  _nEnsureSentinel(el);
+  _nRenderNextBatch();
+  if(_nRenderedCount<_nRenderList.length){
+    var sentinel=document.getElementById('nListSentinel');
+    if(sentinel&&'IntersectionObserver' in window){
+      _nIO=new IntersectionObserver(function(entries){
+        entries.forEach(function(en){if(en.isIntersecting)_nRenderNextBatch();});
+      },{rootMargin:'600px 0px'});
+      _nIO.observe(sentinel);
+    } else {
+      // fallback: render everything if IntersectionObserver isn't available
+      while(_nRenderedCount<_nRenderList.length)_nRenderNextBatch();
+    }
+  }
 }
 
 function sfS(tag,el){
@@ -2952,73 +3054,69 @@ document.addEventListener('click',function(e){
 document.addEventListener('scroll',function(){document.getElementById('tagLabelColorPop').classList.remove('show');},true);
 
 // ── TAG LONG PRESS — opens label color picker ──
-function attachTagLongPress(btn, section, tag){
-  var timer=null, moved=false, startX=0, startY=0;
-  btn.addEventListener('touchstart',function(e){
-    moved=false;
-    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
-    timer=setTimeout(function(){
-      if(!moved){
-        // vibrate feedback
-        if(navigator.vibrate)navigator.vibrate(18);
-        showTagLabelColorPop(e.touches[0],section,tag);
-      }
-    },600);
-  },{passive:true});
-  btn.addEventListener('touchmove',function(e){
-    var dx=e.touches[0].clientX-startX, dy=e.touches[0].clientY-startY;
-    if(Math.abs(dx)>6||Math.abs(dy)>6){moved=true;clearTimeout(timer);}
-  },{passive:true});
-  btn.addEventListener('touchend',function(){clearTimeout(timer);});
-  btn.addEventListener('touchcancel',function(){clearTimeout(timer);});
-  // Desktop right-click still opens old tag context menu
-  btn.addEventListener('contextmenu',function(e){
-    e.preventDefault();
-    showTagLabelColorPop(e,section,tag);
-  });
-}
-
-// ── TAG DRAG REORDER (touch-based, sermon only) ──
+// ── TAG LONG-PRESS → CONTEXT MENU, WITH SEAMLESS HAND-OFF TO DRAG-REORDER ──
+// Single gesture, single timer per chip:
+//   • Hold still  → context menu opens (Rename / Tag Color / Move left / Move right / Delete)
+//   • Then drag   → menu closes immediately and the chip follows the finger to reorder
+//   • Move first (before the hold completes) → treated as a normal scroll, nothing opens
 var _dragState={active:false,el:null,section:null,origTag:null,placeholder:null,startX:0,startY:0,moved:false};
 
-function initTagDrag(bar, section){
-  var chips=bar.querySelectorAll('.tag-chip:not([data-tag="all"])');
-  chips.forEach(function(chip){
-    chip.addEventListener('touchstart',function(e){
-      _dragState.startX=e.touches[0].clientX;
-      _dragState.startY=e.touches[0].clientY;
-      _dragState.moved=false;
-      _dragState.el=chip;
-      _dragState.section=section;
-      _dragState.origTag=chip.dataset.tag;
-      _dragState.dragTimer=setTimeout(function(){
-        if(!_dragState.moved){
-          startTagDrag(e,chip,section);
-        }
-      },450);
-    },{passive:true});
-    chip.addEventListener('touchmove',function(e){
-      var dx=e.touches[0].clientX-_dragState.startX;
-      var dy=e.touches[0].clientY-_dragState.startY;
-      if(!_dragState.active&&(Math.abs(dx)>8||Math.abs(dy)>8)){
-        _dragState.moved=true;
-        clearTimeout(_dragState.dragTimer);
-      }
-      if(_dragState.active){
-        e.preventDefault();
-        onTagDragMove(e);
-      }
-    },{passive:false});
-    chip.addEventListener('touchend',function(){
-      clearTimeout(_dragState.dragTimer);
-      if(_dragState.active)endTagDrag();
-    });
-    chip.addEventListener('touchcancel',function(){
-      clearTimeout(_dragState.dragTimer);
-      if(_dragState.active)cancelTagDrag();
-    });
+function attachTagLongPress(btn, section, tag){
+  var timer=null, startX=0, startY=0, menuOpen=false, settled=false;
+  var DRAG_THRESHOLD=10;
+
+  btn.addEventListener('touchstart',function(e){
+    settled=false; menuOpen=false;
+    startX=e.touches[0].clientX; startY=e.touches[0].clientY;
+    timer=setTimeout(function(){
+      settled=true;
+      if(navigator.vibrate)navigator.vibrate(18);
+      showTagCtx({currentTarget:btn},section,tag);
+      menuOpen=true;
+    },450);
+  },{passive:true});
+
+  btn.addEventListener('touchmove',function(e){
+    var t=e.touches[0];
+    var dx=t.clientX-startX, dy=t.clientY-startY;
+    var dist=Math.abs(dx)+Math.abs(dy);
+    if(!settled){
+      // moved before the long-press fired → just a scroll/swipe, cancel everything
+      if(dist>DRAG_THRESHOLD)clearTimeout(timer);
+      return;
+    }
+    if(menuOpen&&dist>DRAG_THRESHOLD){
+      // hand off: close the menu and start dragging from the current finger position
+      hideTagCtx();
+      menuOpen=false;
+      _dragState.el=btn;_dragState.section=section;_dragState.origTag=tag;
+      _dragState.active=false; // startTagDrag sets this true
+      startTagDrag(e,btn,section);
+      return;
+    }
+    if(_dragState.active&&_dragState.el===btn){
+      e.preventDefault();
+      onTagDragMove(e);
+    }
+  },{passive:false});
+
+  btn.addEventListener('touchend',function(e){
+    clearTimeout(timer);
+    if(_dragState.active&&_dragState.el===btn)endTagDrag();
+  });
+  btn.addEventListener('touchcancel',function(){
+    clearTimeout(timer);
+    if(_dragState.active&&_dragState.el===btn)cancelTagDrag();
+  });
+  // Desktop right-click opens the same context menu
+  btn.addEventListener('contextmenu',function(e){
+    e.preventDefault();
+    showTagCtx(e,section,tag);
   });
 }
+
+// kept as a no-op shim — drag init now happens per-chip inside attachTagLongPress
+function initTagDrag(bar, section){}
 
 function startTagDrag(e,chip,section){
   if(navigator.vibrate)navigator.vibrate(22);
