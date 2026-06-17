@@ -1728,7 +1728,7 @@ body{
 <div class="ctx-menu" id="tagCtxMenu">
   <div class="ctx-item" onclick="tagCtxRename()">Rename</div>
   <div class="ctx-sep"></div>
-  <div class="ctx-item" id="tagCtxColorItem" onclick="tagCtxOpenColor()">Tag Color</div>
+  <div class="ctx-item" id="tagCtxColorItem" onclick="tagCtxOpenColor(event)">Tag Color</div>
   <div class="ctx-sep"></div>
   <div class="ctx-item" onclick="tagCtxMoveLeft()">Move left</div>
   <div class="ctx-item" onclick="tagCtxMoveRight()">Move right</div>
@@ -2344,17 +2344,28 @@ function closeFP(id){
   }
 })();
 
-// 2) Tapping anywhere inside the floating toolbar (the "···" button, B/I/U/S,
-//    color dots, alignment, etc.) must NOT steal focus away from the
-//    contenteditable area — otherwise the keyboard closes on every tap.
-//    Using mousedown/touchstart + preventDefault keeps focus (and the
-//    keyboard) right where it was; the click handlers still run normally.
+// 2) Tapping the floating toolbar (the "···" button, B/I/U/S, color dots,
+//    alignment, etc.) must NOT steal focus away from the contenteditable
+//    area — otherwise the on-screen keyboard closes.
+//    IMPORTANT: we must NOT preventDefault() on touchstart — doing so
+//    suppresses the synthetic click event entirely on mobile browsers,
+//    which is why the "···" popup previously failed to open on touch.
+//    Instead: block mousedown's default (prevents focus jump on desktop,
+//    does not affect click), and re-focus the active editor right after
+//    any toolbar button is actually clicked (covers both mouse and touch).
 document.querySelectorAll('.nb-toolbar-wrap').forEach(function(wrap){
-  ['mousedown','touchstart'].forEach(function(evt){
-    wrap.addEventListener(evt,function(e){
-      var btn=e.target.closest('button');
-      if(btn)e.preventDefault();
-    },{passive:false});
+  wrap.addEventListener('mousedown',function(e){
+    var btn=e.target.closest('button');
+    if(btn)e.preventDefault();
+  },{passive:false});
+  wrap.addEventListener('click',function(e){
+    var btn=e.target.closest('button');
+    if(!btn)return;
+    var isNoteToolbar = wrap.id==='tbNote';
+    var editor=document.getElementById(isNoteToolbar?'nBody':'sBody');
+    if(editor && document.activeElement!==editor){
+      editor.focus();
+    }
   });
 });
 
@@ -2997,7 +3008,7 @@ var TAG_LABEL_COLORS=[
   '#e06030','#969696'
 ];
 
-var _tlcpTarget=null, _tlcpSection=null;
+var _tlcpTarget=null, _tlcpSection=null, _tlcpJustOpened=false;
 
 (function(){
   var sw=document.getElementById('tagLabelColorSwatches');
@@ -3049,6 +3060,7 @@ function getTagLabelColor(section,tag){
 }
 
 document.addEventListener('click',function(e){
+  if(_tlcpJustOpened)return;
   if(!e.target.closest('#tagLabelColorPop'))document.getElementById('tagLabelColorPop').classList.remove('show');
 });
 document.addEventListener('scroll',function(){document.getElementById('tagLabelColorPop').classList.remove('show');},true);
@@ -3211,7 +3223,9 @@ function showTagCtx(ev,section,name){
   menu.style.left=x+'px';menu.style.top=y+'px';
 }
 function hideTagCtx(){document.getElementById('tagCtxMenu').classList.remove('show');}
-function tagCtxOpenColor(){
+function tagCtxOpenColor(e){
+  if(e&&e.stopPropagation)e.stopPropagation();
+  else if(window.event&&window.event.stopPropagation)window.event.stopPropagation();
   hideTagCtx();
   // Show tag label color picker near center of screen
   var pop=document.getElementById('tagLabelColorPop');
@@ -3220,6 +3234,8 @@ function tagCtxOpenColor(){
   var curIdx=D.tagLabelColors?(D.tagLabelColors[tagCtxSection+':'+tagCtxName]):undefined;
   swatches.forEach(function(s,i){s.classList.toggle('selected',i===curIdx);});
   pop.classList.add('show');
+  _tlcpJustOpened=true;
+  setTimeout(function(){_tlcpJustOpened=false;},0);
   var x=window.innerWidth/2-105, y=window.innerHeight/2-55;
   pop.style.left=x+'px'; pop.style.top=y+'px';
 }
